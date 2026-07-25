@@ -3,6 +3,7 @@ package player
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"codeberg.org/dergs/tonearm/internal/gettext"
 	"codeberg.org/dergs/tonearm/internal/notifications"
@@ -16,6 +17,16 @@ import (
 )
 
 func playTrack(track tonearm.Track) error {
+	if !track.IsStreamable() {
+		notifications.OnToast.Notify(gettext.Get("Track not available for streaming, skipping to next track"))
+		Next()
+		return errors.New("track not available for streaming")
+	}
+
+	fmt.Println("PLAY NEW TRACK")
+	stateMachine.Fire(TRIGGER_PLAY_TRACK, track, false)
+	return nil
+
 	tidal, err := injector.Inject[*tidalapi.TidalAPI]()
 	if err != nil {
 		return err
@@ -37,12 +48,6 @@ func playTrack(track tonearm.Track) error {
 		logger.Debug("gapless playback detected, not enqueueing track again")
 		resetLoadingState()
 		return nil
-	}
-
-	if !track.IsStreamable() {
-		notifications.OnToast.Notify(gettext.Get("Track not available for streaming, skipping to next track"))
-		Next()
-		return errors.New("track not available for streaming")
 	}
 
 	logger.Debug("fetching track manifest", "track_id", track.ID())

@@ -1,90 +1,89 @@
 package player
 
 import (
-	"context"
 	"time"
 
 	"codeberg.org/dergs/tonearm/internal/settings"
-	"codeberg.org/dergs/tonearm/internal/signals"
-	"codeberg.org/dergs/tonearm/pkg/tidalapi"
-	openapi "codeberg.org/dergs/tonearm/pkg/tidalapi/models/openapi"
-	v1 "codeberg.org/dergs/tonearm/pkg/tidalapi/models/v1"
-	"codeberg.org/dergs/tonearm/pkg/tonearm"
 	"codeberg.org/puregotk/puregotk/v4/glib"
 	"github.com/go-gst/go-gst/gst"
-	"github.com/infinytum/injector"
 )
 
 const UpdateInterval = 250 * time.Millisecond
 
 var updateRunnerSourceHandle uint32
 var didQueueGaplessPlayback bool
-var disableGaplessPlayback bool
 
 func onAboutToFinish(_ *gst.Element) {
-	logger := logger.With("event", "aboutToFinish").WithGroup("aboutToFinish")
-	count := 0
-	for {
-		if !didQueueGaplessPlayback {
-			break
-		}
+	stateMachine.Fire(TRIGGER_GAPLESS_HINT)
+	return
+	// logger := logger.With("event", "aboutToFinish").WithGroup("aboutToFinish")
+	// count := 0
+	// for {
+	// 	if !didQueueGaplessPlayback {
+	// 		break
+	// 	}
 
-		if count > 5 {
-			logger.Warn("Previous gapless transition hasn't completed in 10 seconds. Enqueueing new track anyway.")
-			break
-		}
+	// 	if count > 5 {
+	// 		logger.Warn("Previous gapless transition hasn't completed in 10 seconds. Enqueueing new track anyway.")
+	// 		break
+	// 	}
 
-		count++
-		logger.Debug("Previous gapless transition has not completed yet, sleeping...", "count", count)
-		time.Sleep(1 * time.Second)
-	}
+	// 	count++
+	// 	logger.Debug("Previous gapless transition has not completed yet, sleeping...", "count", count)
+	// 	time.Sleep(1 * time.Second)
+	// }
 
-	if RepeatModeChanged.CurrentValue() == RepeatModeTrack {
-		return
-	}
+	// if RepeatModeChanged.CurrentValue() == RepeatModeTrack {
+	// 	return
+	// }
 
-	if disableGaplessPlayback {
-		return
-	}
+	// if disableGaplessPlayback {
+	// 	return
+	// }
 
-	nextTrack := getNextTrackFromQueue(true)
-	if nextTrack != nil && nextTrack.IsStreamable() {
-		trackManifest, err := injector.MustInject[*tidalapi.TidalAPI]().OpenAPI.V2.TrackManifests.TrackManifest(
-			context.Background(),
-			nextTrack.ID(),
-			openapi.ManifestTypeMPEGDASH,
-			openapi.ManifestFormatsForQuality(settings.Player().GetAudioQuality()),
-			openapi.ManifestURISchemeHTTPS,
-			openapi.ManifestUsagePlayback,
-			false,
-		)
-		if err != nil {
-			logger.Error("failed to get track manifest", "error", err)
-			return
-		}
-		if err := enqueue(trackManifest); err != nil {
-			logger.Error("enqueueing for gapless playback", "error", err)
-			return
-		}
-		logger.Info("enqueued next song for gapless playback", "track_id", nextTrack.ID())
-		didQueueGaplessPlayback = true
+	// nextTrack := getNextTrackFromQueue(true)
+	// if nextTrack != nil && nextTrack.IsStreamable() {
+	// 	trackManifest, err := injector.MustInject[*tidalapi.TidalAPI]().OpenAPI.V2.TrackManifests.TrackManifest(
+	// 		context.Background(),
+	// 		nextTrack.ID(),
+	// 		openapi.ManifestTypeMPEGDASH,
+	// 		openapi.ManifestFormatsForQuality(settings.Player().GetAudioQuality()),
+	// 		openapi.ManifestURISchemeHTTPS,
+	// 		openapi.ManifestUsagePlayback,
+	// 		false,
+	// 	)
+	// 	if err != nil {
+	// 		logger.Error("failed to get track manifest", "error", err)
+	// 		return
+	// 	}
+	// 	if err := enqueue(trackManifest); err != nil {
+	// 		logger.Error("enqueueing for gapless playback", "error", err)
+	// 		return
+	// 	}
+	// 	logger.Info("enqueued next song for gapless playback", "track_id", nextTrack.ID())
+	// 	didQueueGaplessPlayback = true
 
-		// One-Shot Handler to update the track quality
-		TrackChanged.OnLazy(func(t tonearm.Track) bool {
-			logger.Debug("triggered one-shot handler to propagate gapless playback quality")
-			PlaybackQualityChanged.Notify(func(oldValue v1.AudioQuality) v1.AudioQuality {
-				return openapi.AudioQualityFromFormats(trackManifest.Data.Attributes.Formats)
-			})
-			return signals.Unsubscribe
-		})
-	}
+	// 	// One-Shot Handler to update the track quality
+	// 	TrackChanged.OnLazy(func(t tonearm.Track) bool {
+	// 		logger.Debug("triggered one-shot handler to propagate gapless playback quality")
+	// 		PlaybackQualityChanged.Notify(func(oldValue v1.AudioQuality) v1.AudioQuality {
+	// 			return openapi.AudioQualityFromFormats(trackManifest.Data.Attributes.Formats)
+	// 		})
+	// 		return signals.Unsubscribe
+	// 	})
+	// }
 }
 
 func onBusMessage(msg *gst.Message) bool {
 	switch msg.Type() {
 	case gst.MessageError:
 		err := msg.ParseError()
-		logger.Error("playback failed", "code", err.Code(), "message", err.Message(), "error", err.Error(), "debug", err.DebugString())
+		if (err.Code() == gst.ResourceErrorNotAuthorized || err.Code() == gst.ResourceErrorNotFound) && err.Domain() == gst.DomainResource {
+			logger.Warn("playback token expired, restarting playback session")
+			stateMachine.Fire(TRIGGER_TOKEN_EXPIRED)
+			return true
+		}
+		logger.Error("playback failed", "code", err.Code(), "domain", err.Domain(), "message", err.Message(), "error", err.Error(), "debug", err.DebugString())
 	case gst.MessageTag:
 		// The logs in this branch are all debug because of the nature of MessageTag.
 		// If they weren't Debug, the console would get spammed with error messages,
@@ -126,40 +125,9 @@ func onBusMessage(msg *gst.Message) bool {
 			return &res
 		})
 	case gst.MessageStreamStart:
-		startUpdateRunner()
-		playbin.Set("volume", settings.Player().GetVolume())
-		// A hack to trigger the correct track updates with gapless playback
-		if didQueueGaplessPlayback {
-			stateBeforeLoading = gst.StatePlaying
-			go playNextTrack()
-		}
+		stateMachine.Fire(gst.MessageStreamStart)
 	case gst.MessageEOS:
-		playbin.SetState(gst.StatePaused)
-		stopUpdateRunner()
-		PlaybackStateChanged.Notify(func(oldValue *PlaybackState) *PlaybackState {
-			newState := *oldValue
-			newState.Status = PlaybackStatusStopped
-			return &newState
-		})
-		go playNextTrack()
-	case gst.MessageBuffering:
-		percent := msg.ParseBuffering()
-		if percent == 100 {
-			playbin.SetState(gst.StatePlaying)
-		} else {
-			playbin.SetState(gst.StatePaused)
-		}
-	case gst.MessageStateChanged:
-		_, newState := msg.ParseStateChanged()
-		switch newState {
-		case gst.StatePlaying:
-			startUpdateRunner()
-			PlaybackStateChanged.Notify(func(oldValue *PlaybackState) *PlaybackState {
-				newState := *oldValue
-				newState.Status = PlaybackStatusPlaying
-				return &newState
-			})
-		}
+		stateMachine.Fire(gst.MessageEOS)
 	}
 	return true
 }
@@ -247,10 +215,6 @@ func onVolumeChange() {
 var onUpdateTick = glib.SourceFunc(func(uintptr) bool {
 	PlaybackStateChanged.Notify(func(oldValue *PlaybackState) *PlaybackState {
 		newState := *oldValue
-		if ok, duration := playbin.QueryDuration(gst.FormatTime); ok && !didQueueGaplessPlayback {
-			newState.Duration = time.Duration(duration)
-		}
-
 		if ok, position := playbin.QueryPosition(gst.FormatTime); ok {
 			newState.Position = time.Duration(position)
 			newState.IsSeeking = false

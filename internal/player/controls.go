@@ -36,24 +36,17 @@ func SetShuffle(enabled bool) {
 
 func Next() {
 	logger.Debug("player controls requested to play next track")
-	disableGaplessPlayback = true
 	playNextTrack()
-	disableGaplessPlayback = false
 }
 
 func Pause() {
 	logger.Debug("player controls requested to pause")
-	playbin.SetState(gst.StatePaused)
-	PlaybackStateChanged.Notify(func(oldValue *PlaybackState) *PlaybackState {
-		newState := *oldValue
-		newState.Status = PlaybackStatusPaused
-		return &newState
-	})
+	stateMachine.Fire(TRIGGER_PAUSE)
 }
 
 func Play() {
 	logger.Debug("player controls requested to start playing")
-	playbin.SetState(gst.StatePlaying)
+	stateMachine.Fire(TRIGGER_RESUME)
 }
 
 func PlayPause() {
@@ -71,9 +64,7 @@ func PlayPause() {
 
 func Previous() {
 	logger.Debug("player controls requested to play previous track")
-	disableGaplessPlayback = true
 	playPreviousTrack()
-	disableGaplessPlayback = false
 }
 
 func SeekToPercent(percent float64) {
@@ -166,7 +157,7 @@ func SetVolume(volume float64) {
 
 func Stop() {
 	logger.Debug("player controls requested to stop")
-	playbin.SetState(gst.StateNull)
+	stateMachine.Fire(TRIGGER_STOP)
 }
 
 func ToggleShuffle() {

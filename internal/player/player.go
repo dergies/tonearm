@@ -2,6 +2,7 @@ package player
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -22,7 +23,7 @@ var (
 	playbin *gst.Element
 )
 
-func init() {
+func initPlayer() {
 	gst.Init(nil)
 	pb, err := gst.NewElement("playbin3")
 	if err != nil {
@@ -113,46 +114,66 @@ func AddTracklistToUserQueue(tracklist []tonearm.Track) error {
 }
 
 func PlayTrackID(trackId string) error {
-	setLoadingState()
 	track, err := resolveTrack(trackId)
 	if err != nil {
-		resetLoadingState()
 		return err
 	}
+	return PlayTrack(track)
+	// setLoadingState()
+	// track, err := resolveTrack(trackId)
+	// if err != nil {
+	// 	resetLoadingState()
+	// 	return err
+	// }
 
-	clearQueues()
-	err = playTrack(track)
-	if err != nil {
-		return err
-	}
+	// clearQueues()
+	// err = playTrack(track)
+	// if err != nil {
+	// 	return err
+	// }
 
-	SourceChanged.Notify(func(oldValue tonearm.PlaybackSource) tonearm.PlaybackSource {
-		return track
-	})
+	// SourceChanged.Notify(func(oldValue tonearm.PlaybackSource) tonearm.PlaybackSource {
+	// 	return track
+	// })
 
-	history.Push(&HistoryEntry{
-		TrackID: track.ID(),
-	})
+	// history.Push(&HistoryEntry{
+	// 	TrackID: track.ID(),
+	// })
 
-	return nil
+	// return nil
 }
 
 func PlayTrack(track tonearm.Track) error {
-	setLoadingState()
-
+	fmt.Println("PLAY NEW TRACK")
 	clearQueues()
-	err := playTrack(track)
-	if err != nil {
-		return err
-	}
-
 	SourceChanged.Notify(func(oldValue tonearm.PlaybackSource) tonearm.PlaybackSource {
 		return track
 	})
+	stateMachine.Fire(TRIGGER_PLAY_TRACK, track, false)
 
-	history.Push(&HistoryEntry{
-		TrackID: track.ID(),
-	})
+	// SourceChanged.Notify(func(oldValue tonearm.PlaybackSource) tonearm.PlaybackSource {
+	// 	return track
+	// })
+
+	// history.Push(&HistoryEntry{
+	// 	TrackID: track.ID(),
+	// })
+
+	// setLoadingState()
+
+	// clearQueues()
+	// err := playTrack(track)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// SourceChanged.Notify(func(oldValue tonearm.PlaybackSource) tonearm.PlaybackSource {
+	// 	return track
+	// })
+
+	// history.Push(&HistoryEntry{
+	// 	TrackID: track.ID(),
+	// })
 
 	return nil
 }
@@ -238,32 +259,26 @@ func PlayArtistTopSongs(artistId string, shuffle bool, position int) error {
 }
 
 func PlayPlaylist(playlistId string, shuffle bool, position int) error {
-	setLoadingState()
 	if err := playPlaylist(playlistId, shuffle, position); err != nil {
-		resetLoadingState()
 		return err
 	}
 	return nil
 }
 
 func PlayTrackRadio(trackId string, skipSelf bool) error {
-	setLoadingState()
 	service, err := injector.Inject[tonearm.Service]()
 	if err != nil {
-		resetLoadingState()
 		return err
 	}
 
 	playlist, err := service.GetTrackRadio(trackId)
 	if err != nil {
 		logger.Error("failed to retrieve mix", "error", err)
-		resetLoadingState()
 		return err
 	}
 
 	if playlist == nil {
 		notifications.OnToast.Notify(gettext.Get("No mix found for the current track"))
-		resetLoadingState()
 		return nil
 	}
 

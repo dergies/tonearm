@@ -5,7 +5,6 @@ import (
 
 	"codeberg.org/dergs/tonearm/internal/player/queue"
 	"codeberg.org/dergs/tonearm/internal/settings"
-	"codeberg.org/dergs/tonearm/internal/signals"
 	"github.com/go-gst/go-gst/gst"
 )
 
@@ -15,18 +14,19 @@ var (
 )
 
 func init() {
-	ShuffleStateChanged.On(func(enabled bool) bool {
-		currentTrackId := ""
-		if TrackChanged.CurrentValue() != nil {
-			currentTrackId = TrackChanged.CurrentValue().ID()
-		}
-		if enabled {
-			BaseQueue.Shuffle(currentTrackId)
-		} else {
-			BaseQueue.Restore(currentTrackId)
-		}
-		return signals.Continue
-	})
+	// BUG: This is a headache. No more.
+	// ShuffleStateChanged.On(func(enabled bool) bool {
+	// 	currentTrackId := ""
+	// 	if TrackChanged.CurrentValue() != nil {
+	// 		currentTrackId = TrackChanged.CurrentValue().ID()
+	// 	}
+	// 	if enabled {
+	// 		BaseQueue.Shuffle(currentTrackId)
+	// 	} else {
+	// 		BaseQueue.Restore(currentTrackId)
+	// 	}
+	// 	return signals.Continue
+	// })
 }
 
 func playNextTrack() {
@@ -46,9 +46,9 @@ func playNextTrack() {
 		}
 		playTrack(nextTrack)
 
-		history.Push(&HistoryEntry{
-			TrackID: nextTrack.ID(),
-		})
+		// history.Push(&HistoryEntry{
+		// 	TrackID: nextTrack.ID(),
+		// })
 
 		return
 	}
@@ -90,13 +90,7 @@ func playPreviousTrack() {
 		UserQueue.Prepend(track)
 
 		// Switch to previous track without clearing base queue
-		track, err = resolveTrack(entry.TrackID)
-		if err != nil {
-			logger.Error("failed to resolve track", "trackID", entry.TrackID, "error", err)
-			return
-		}
-		logger.Debug("playing previous track", "track_id", track.ID(), "action", "previous")
-		playTrack(track)
+		stateMachine.Fire(TRIGGER_PLAY_TRACK_ID, entry.TrackID, true)
 	}
 }
 

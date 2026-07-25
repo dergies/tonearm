@@ -51,6 +51,11 @@ var mprisServer = g.Lazy(func() *mpris.Server {
 	})
 	mprisServer.OnShuffleChanged(func(shuffle bool) {
 		SetShuffle(shuffle)
+		if shuffle {
+			BaseQueue.Shuffle(TrackChanged.CurrentValue().ID())
+		} else {
+			BaseQueue.Restore(TrackChanged.CurrentValue().ID())
+		}
 	})
 	mprisServer.Export()
 	return mprisServer

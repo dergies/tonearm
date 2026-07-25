@@ -103,6 +103,7 @@ func playTracklist(tracks []tonearm.Track, shuffle bool, startingPosition int) (
 	// and enable the shuffle mode for the player.
 	if shuffle {
 		SetShuffle(true)
+		BaseQueue.Shuffle("")
 	}
 
 	// Now we need to kick-off playback by fetching the next track from the queue
@@ -121,9 +122,9 @@ func playTracklist(tracks []tonearm.Track, shuffle bool, startingPosition int) (
 		}
 
 		// The track has started playing, so we can add it to the playback history
-		history.Push(&HistoryEntry{
-			TrackID: nextTrack.ID(),
-		})
+		// history.Push(&HistoryEntry{
+		// 	TrackID: nextTrack.ID(),
+		// })
 	}
 
 	if !shuffle {
