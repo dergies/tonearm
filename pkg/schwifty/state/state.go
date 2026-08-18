@@ -67,16 +67,17 @@ func (s *State[T]) SetValue(value T) {
 		callback(value)
 	}
 	s.callbacksLock.RUnlock()
-	s.value = value
+	if s.stateful {
+		s.value = value
+	}
 }
 
 func (s *State[T]) Value() T {
 	return s.value
 }
 
-func New[T any](value T) *State[T] {
+func New[T any]() *State[T] {
 	return &State[T]{
-		value:     value,
 		callbacks: make(map[string]StateCallback[T]),
 	}
 }

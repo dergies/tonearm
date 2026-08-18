@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+	"os"
 
 	"codeberg.org/dergs/tonearm/internal/resources"
 	"codeberg.org/dergs/tonearm/pkg/schwifty"
@@ -10,7 +11,6 @@ import (
 	"codeberg.org/dergs/tonearm/pkg/schwifty/tracking"
 	"codeberg.org/dergs/tonearm/pkg/tonearm"
 	"codeberg.org/dergs/tonearm/pkg/utils/imgutil"
-	"codeberg.org/puregotk/puregotk/v4/gio"
 	"codeberg.org/puregotk/puregotk/v4/glib"
 	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
@@ -49,29 +49,48 @@ func RenderCover(cover tonearm.Cover, target *state.State[schwifty.Paintable]) c
 			return
 		}
 
-		file := gio.FileNewForUri(cover.Animated())
-		if file == nil {
+		videoBytes, err := injector.MustInject[*imgutil.ImgUtil]().FetchBytes(cover.Animated())
+		if err != nil {
 			return
 		}
 
-		media := gtk.NewMediaFileForFile(file)
+		tmpFile, err := os.CreateTemp("", "tonearm-cover-*.mp4")
+		if err != nil {
+			return
+		}
+		defer tmpFile.Close()
 
-		gobject.SignalConnect(media.Ptr, "notify::prepared", coverNotifyHandler)
+		_, err = tmpFile.Write(videoBytes)
+		if err != nil {
+			return
+		}
 
-		media.SetLoop(true)
-		media.SetMuted(true)
-		media.Play()
+		schwifty.OnMainThreadOncePure(func() {
+			media := gtk.NewMediaFileForFilename(tmpFile.Name())
 
-		var handlerId int
-		handlerId = callback.HandleCallback(media.Object, "notify::prepared", func(mediaptr uintptr, _ uintptr) {
-			media := gtk.MediaFileNewFromInternalPtr(mediaptr)
-			tracking.SetFinalizer("MediaFile", media)
-			callback.DeleteCallback(media.Object, "notify::prepared", handlerId)
-			if ctx.Err() == nil {
-				target.SetValue(media)
-			}
+			callback.RegisterDeletionCallback(media.Ptr, func() {
+				if err := os.Remove(tmpFile.Name()); err != nil {
+					logger.Error("failed to remove temp track cover file", "error", err)
+				} else {
+					logger.Debug("temp track cover file deleted", "name", tmpFile.Name())
+				}
+			})
+
+			gobject.SignalConnect(media.Ptr, "notify::prepared", coverNotifyHandler)
+			var handlerId int
+			handlerId = callback.HandleCallback(media.Object, "notify::prepared", func(mediaptr uintptr, _ uintptr) {
+				media := gtk.MediaFileNewFromInternalPtr(mediaptr)
+				tracking.SetFinalizer("MediaFile", media)
+				callback.DeleteCallback(media.Object, "notify::prepared", handlerId)
+				if ctx.Err() == nil {
+					target.SetValue(media)
+				}
+			})
+
+			media.SetLoop(true)
+			media.SetMuted(true)
+			media.Play()
 		})
-
 	}()
 
 	return cancel

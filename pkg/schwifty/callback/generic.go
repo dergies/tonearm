@@ -137,6 +137,7 @@ func DeleteCallbacks(objectPtr uintptr) {
 	widgetCallbacksLock.Lock()
 	defer widgetCallbacksLock.Unlock()
 	delete(widgetCallbacks, objectPtr)
+	executeDeletionCallbacks(objectPtr)
 	if shouldLogLifecycle {
 		logger.Debug("deleted all callbacks", "ptr", objectPtr)
 	}

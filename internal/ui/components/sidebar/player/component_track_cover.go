@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	coverState = state.New[schwifty.Paintable](nil)
+	coverState = state.New[schwifty.Paintable]()
 )
 
 func init() {

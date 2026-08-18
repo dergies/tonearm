@@ -1,7 +1,6 @@
 package tracklist_header
 
 import (
-	"codeberg.org/dergs/tonearm/internal/resources"
 	"codeberg.org/dergs/tonearm/internal/ui/components"
 	"codeberg.org/dergs/tonearm/pkg/schwifty"
 	"codeberg.org/dergs/tonearm/pkg/schwifty/state"
@@ -11,7 +10,7 @@ import (
 )
 
 func componentCover(cover tonearm.Cover) schwifty.AspectFrame {
-	coverState := state.New[schwifty.Paintable](resources.MissingAlbum())
+	coverState := state.New[schwifty.Paintable]()
 	return AspectFrame(
 		Image().
 			PixelSize(146).

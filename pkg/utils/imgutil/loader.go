@@ -49,3 +49,7 @@ func (i *ImgUtil) FetchCropped(url string) (*gdk.Texture, error) {
 
 	return cropped, nil
 }
+
+func (i *ImgUtil) FetchBytes(url string) ([]byte, error) {
+	return i.fetch(url)
+}
