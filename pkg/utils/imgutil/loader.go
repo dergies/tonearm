@@ -1,6 +1,8 @@
 package imgutil
 
 import (
+	"errors"
+
 	"codeberg.org/dergs/tonearm/internal/settings"
 	"codeberg.org/dergs/tonearm/pkg/schwifty/tracking"
 	"codeberg.org/puregotk/puregotk/v4/gdk"
@@ -29,8 +31,8 @@ func (i *ImgUtil) Load(c *ttlcache.Cache[string, *gdk.Texture], key string) *ttl
 
 func (i *ImgUtil) Fetch(url string) (*gdk.Texture, error) {
 	item := i.cache.Get(url)
-	if item == nil {
-		return nil, nil
+	if item == nil || item.Value() == nil {
+		return nil, errors.New("image unavailable")
 	}
 
 	return item.Value(), nil
@@ -38,8 +40,8 @@ func (i *ImgUtil) Fetch(url string) (*gdk.Texture, error) {
 
 func (i *ImgUtil) FetchCropped(url string) (*gdk.Texture, error) {
 	item := i.cache.Get(url)
-	if item == nil {
-		return nil, nil
+	if item == nil || item.Value() == nil {
+		return nil, errors.New("image unavailable")
 	}
 
 	texture := item.Value()

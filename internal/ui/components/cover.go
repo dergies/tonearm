@@ -35,6 +35,7 @@ func RenderCover(cover tonearm.Cover, target *state.State[schwifty.Paintable]) c
 		if cover.HasStatic() {
 			texture, err := injector.MustInject[*imgutil.ImgUtil]().FetchCropped(cover.Static())
 			if err != nil {
+				target.SetValue(resources.MissingAlbum())
 				cancel()
 				return
 			}
@@ -45,6 +46,7 @@ func RenderCover(cover tonearm.Cover, target *state.State[schwifty.Paintable]) c
 
 		// If the cover has no animated image, there is nothing left to do
 		if !cover.HasAnimated() {
+			target.SetValue(resources.MissingAlbum())
 			cancel()
 			return
 		}
